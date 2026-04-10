@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hyderabad Hosts - A Little more than your Expectations</title>
+    <meta name="description" content="Hyderabad Hosts - Multi-Cuisine Restaurant in Madhapur. Authentic Hyderabadi Biryani, Arabian Mandi, and more since 2004." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700&family=Playfair+Display:wght@400;700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              "inverse-on-surface": "#faefdf",
+              "on-primary": "#ffffff",
+              "tertiary-fixed-dim": "#4ae183",
+              "on-tertiary": "#ffffff",
+              "on-error-container": "#93000a",
+              "on-error": "#ffffff",
+              "background": "#fff8f1",
+              "on-primary-fixed-variant": "#584400",
+              "primary-fixed": "#ffe08e",
+              "on-surface-variant": "#4d4635",
+              "secondary-fixed": "#ffdbcc",
+              "on-secondary-fixed-variant": "#5c4033",
+              "tertiary": "#006d37",
+              "surface-container": "#f7eddd",
+              "on-tertiary-fixed-variant": "#005228",
+              "surface-variant": "#ebe1d1",
+              "error-container": "#ffdad6",
+              "surface-dim": "#e2d9c9",
+              "inverse-primary": "#ecc246",
+              "surface-bright": "#fff8f1",
+              "on-background": "#1f1b11",
+              "on-surface": "#1f1b11",
+              "on-primary-container": "#4b3a00",
+              "outline": "#7f7663",
+              "primary-container": "#c9a227",
+              "primary": "#755b00",
+              "on-primary-fixed": "#241a00",
+              "on-tertiary-fixed": "#00210c",
+              "secondary-fixed-dim": "#e6bead",
+              "on-secondary-fixed": "#2c160b",
+              "on-secondary": "#ffffff",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#004621",
+              "surface-container-highest": "#ebe1d1",
+              "surface-container-low": "#fdf2e2",
+              "surface-tint": "#755b00",
+              "error": "#ba1a1a",
+              "secondary": "#765749",
+              "tertiary-fixed": "#6bfe9c",
+              "outline-variant": "#d1c5af",
+              "secondary-container": "#fed4c2",
+              "surface-container-high": "#f1e7d7",
+              "tertiary-container": "#14bf66",
+              "on-secondary-container": "#795a4c",
+              "surface": "#fff8f1",
+              "primary-fixed-dim": "#ecc246",
+              "inverse-surface": "#353025"
+            },
+            fontFamily: {
+              headline: ["Noto Serif", "Playfair Display", "serif"],
+              body: ["Plus Jakarta Sans", "sans-serif"],
+              label: ["Montserrat", "Plus Jakarta Sans", "sans-serif"],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .islamic-pattern {
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l2.121 5.121L37.242 3l1.879 6.879L45 9l1.121 7.121L53.242 15l.379 7.379L60 24.379l-1.879 6.879L60 38.121l-6.379 2L53.242 47.5l-7.121-1.121L45 53.5l-5.879-.879L37.242 60l-5.121-7.121L30 55.758l-2.121-2.879L22.758 60l-5.121-7.379L11.758 53.5l-1.121-7.121L3.242 47.5l.379-7.379L0 38.121l1.879-6.879L0 24.379l6.379-2L6.758 15l7.121 1.121L15 9l5.879.879L22.758 3l5.121 7.121L30 0z' fill='%23c9a227' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .hero-gradient {
+        background: linear-gradient(to bottom, rgba(31, 27, 17, 0.3), rgba(31, 27, 17, 0.85));
+      }
+    </style>
+  </head>
+  <body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

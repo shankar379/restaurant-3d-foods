@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Hyderabad Hosts - AR Menu</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-serif; touch-action: none; width: 100vw; height: 100vh; }
+
+    canvas { position: fixed; inset: 0; z-index: 1; }
+    #camera-feed { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; display: none; }
+
+    #splash {
+      position: fixed; inset: 0; z-index: 100;
+      background: linear-gradient(135deg, #ff6b35, #f7c948);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #fff; text-align: center; padding: 2rem;
+    }
+    #splash h1 { font-size: 2.2rem; margin-bottom: 0.3rem; letter-spacing: 1px; }
+    #splash .dish { font-size: 1.4rem; margin-bottom: 0.1rem; opacity: 0.95; }
+    #splash .price { font-size: 1.8rem; font-weight: bold; margin-bottom: 1.2rem; }
+    #splash .desc { font-size: 0.9rem; opacity: 0.85; margin-bottom: 2rem; max-width: 280px; line-height: 1.7; }
+    #splash button {
+      padding: 16px 48px; font-size: 1.1rem; font-weight: bold;
+      border: none; border-radius: 30px; cursor: pointer;
+      background: #fff; color: #ff6b35;
+      box-shadow: 0 6px 25px rgba(0,0,0,0.25);
+    }
+    #splash button:active { transform: scale(0.94); }
+    #splash .ar-badge { margin-top: 1rem; font-size: 0.75rem; opacity: 0.6; }
+
+    #overlay { position: fixed; inset: 0; z-index: 10; pointer-events: none; display: none; }
+    #overlay > * { pointer-events: auto; }
+
+    #label {
+      position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+      background: rgba(20,20,20,0.85); color: #fff;
+      padding: 10px 22px; border-radius: 25px;
+      font-size: 0.95rem; font-weight: 600; text-align: center;
+      display: none; backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    #label .tag {
+      display: inline-block; background: #2ecc71; padding: 2px 10px;
+      border-radius: 10px; margin-left: 8px; font-size: 0.85rem;
+    }
+
+    #hint {
+      position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.8); color: #fff;
+      padding: 14px 28px; border-radius: 20px;
+      font-size: 0.95rem; text-align: center;
+      backdrop-filter: blur(10px); display: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      animation: gentle-pulse 2.5s ease-in-out infinite;
+      transition: opacity 0.4s;
+    }
+    @keyframes gentle-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+
+    #reset-btn {
+      position: fixed; bottom: 40px; right: 20px; z-index: 15;
+      width: 50px; height: 50px; border-radius: 50%;
+      background: rgba(255,255,255,0.9); border: none; cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3); display: none;
+      font-size: 1.2rem; line-height: 50px; text-align: center;
+    }
+
+    #error {
+      position: fixed; inset: 0; z-index: 100; background: #1a1a2e;
+      color: #fff; display: none; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center; padding: 2rem;
+    }
+    #error h2 { color: #ff6b35; margin-bottom: 1rem; }
+    #error p { opacity: 0.7; max-width: 300px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+  <div id="splash">
+    <h1>Hyderabad Hosts</h1>
+    <div class="dish" id="s-name"></div>
+    <div class="price" id="s-price"></div>
+    <div class="desc">
+      See this dish in 3D — right on your table!<br>
+      Point camera at the table and tap to place.
+    </div>
+    <button id="start-btn" onclick="startExperience()">View in AR</button>
+    <div class="ar-badge" id="ar-mode-info"></div>
+  </div>
+
+  <div id="error">
+    <h2>Camera Required</h2>
+    <p>Please allow camera access. Try opening this link in Chrome or Safari on your phone.</p>
+  </div>
+
+  <div id="overlay">
+    <div id="label">
+      <span id="l-name"></span>
+      <span class="tag" id="l-price"></span>
+    </div>
+    <div id="hint"></div>
+    <button id="reset-btn" onclick="resetPlacement()">&#8634;</button>
+  </div>
+
+  <video id="camera-feed" autoplay playsinline muted></video>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script>
+    /* ======== ITEM DATABASE ======== */
+    var ITEMS = {
+      biryani:          { name: 'Hyderabadi Biryani', price: '\u20B9250', color: 0xff6b35 },
+      'butter-chicken': { name: 'Butter Chicken',     price: '\u20B9300', color: 0xc0392b },
+      tandoori:         { name: 'Tandoori Chicken',    price: '\u20B9350', color: 0xd35400 },
+      naan:             { name: 'Butter Naan',         price: '\u20B960',  color: 0xe8c44a },
+      paneer:           { name: 'Paneer Tikka',        price: '\u20B9220', color: 0xf39c12 },
+      haleem:           { name: 'Haleem',              price: '\u20B9180', color: 0x8B5E3C },
+      dosa:             { name: 'Masala Dosa',         price: '\u20B9120', color: 0xC8A951 },
+    };
+
+    var params = new URLSearchParams(window.location.search);
+    var itemKey = params.get('item') || 'biryani';
+    var item = ITEMS[itemKey] || ITEMS.biryani;
+
+    document.getElementById('s-name').textContent = item.name;
+    document.getElementById('s-price').textContent = item.price;
+    document.getElementById('l-name').textContent = item.name;
+    document.getElementById('l-price').textContent = item.price;
+
+    /* ======== GLOBALS ======== */
+    var renderer, scene, camera, foodGroup, clock, reticle3D, groundPlane;
+    var placed = false, useWebXR = false;
+    var xrHitTestSource = null, xrRefSpace = null;
+    var raycaster = new THREE.Raycaster();
+    var touchPt = new THREE.Vector2();
+
+    /* Device orientation for camera tracking */
+    var deviceAlpha = 0, deviceBeta = 90, deviceGamma = 0;
+    var smoothAlpha = 0, smoothBeta = 90, smoothGamma = 0;
+    var orientationReady = false;
+
+    /* Pinch zoom */
+    var lastPinchDist = 0, foodScale = 1;
+
+    /* ======== CHECK WEBXR ======== */
+    function checkWebXR() {
+      if (!navigator.xr) return Promise.resolve(false);
+      return navigator.xr.isSessionSupported('immersive-ar').catch(function() { return false; });
+    }
+
+    /* ======== REQUEST ORIENTATION PERMISSION (iOS 13+) ======== */
+    function requestOrientation() {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        return DeviceOrientationEvent.requestPermission().then(function(state) {
+          return state === 'granted';
+        }).catch(function() { return false; });
+      }
+      return Promise.resolve(true);
+    }
+
+    /* ======== SETUP DEVICE ORIENTATION ======== */
+    function setupOrientation() {
+      window.addEventListener('deviceorientation', function(e) {
+        if (e.alpha !== null) {
+          deviceAlpha = e.alpha;
+          deviceBeta = e.beta;
+          deviceGamma = e.gamma;
+          orientationReady = true;
+        }
+      }, true);
+    }
+
+    /* ======== SMOOTH LERP ======== */
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function lerpAngle(a, b, t) {
+      var diff = b - a;
+      while (diff > 180) diff -= 360;
+      while (diff < -180) diff += 360;
+      return a + diff * t;
+    }
+
+    /* ======== CREATE SCENE ======== */
+    function createScene() {
+      clock = new THREE.Clock();
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      document.body.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.05, 20);
+
+      /* 3-point lighting */
+      scene.add(new THREE.AmbientLight(0xfff5e6, 0.5));
+
+      var keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      keyLight.position.set(0.5, 2, 1.5);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.set(1024, 1024);
+      keyLight.shadow.camera.near = 0.1;
+      keyLight.shadow.camera.far = 10;
+      keyLight.shadow.camera.left = -1;
+      keyLight.shadow.camera.right = 1;
+      keyLight.shadow.camera.top = 1;
+      keyLight.shadow.camera.bottom = -1;
+      keyLight.shadow.bias = -0.002;
+      keyLight.shadow.normalBias = 0.02;
+      scene.add(keyLight);
+
+      var fillLight = new THREE.DirectionalLight(0xffe0c0, 0.4);
+      fillLight.position.set(-1.5, 1.5, -0.5);
+      scene.add(fillLight);
+
+      scene.add(new THREE.DirectionalLight(0xfff8f0, 0.3).position.set(0, 1, -2) && new THREE.DirectionalLight(0xfff8f0, 0.3));
+
+      createFoodModel();
+      createReticle();
+
+      /* Invisible ground plane for raycasting */
+      groundPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(20, 20),
+        new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+      );
+      groundPlane.rotation.x = -Math.PI / 2;
+      groundPlane.position.y = 0;
+      scene.add(groundPlane);
+
+      window.addEventListener('resize', function() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    /* ======== 3D RETICLE (ring on the ground) ======== */
+    function createReticle() {
+      reticle3D = new THREE.Group();
+
+      /* Outer ring */
+      var ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.08, 0.095, 48),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.7, transparent: true, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      reticle3D.add(ring);
+
+      /* Inner dot */
+      var dot = new THREE.Mesh(
+        new THREE.CircleGeometry(0.015, 24),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, side: THREE.DoubleSide })
+      );
+      dot.rotation.x = -Math.PI / 2;
+      reticle3D.add(dot);
+
+      /* Cross lines */
+      for (var i = 0; i < 4; i++) {
+        var line = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.003, 0.03),
+          new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.5, transparent: true, side: THREE.DoubleSide })
+        );
+        line.rotation.x = -Math.PI / 2;
+        var angle = (i / 4) * Math.PI * 2;
+        line.position.set(Math.cos(angle) * 0.05, 0.001, Math.sin(angle) * 0.05);
+        line.rotation.z = angle;
+        reticle3D.add(line);
+      }
+
+      reticle3D.position.y = 0.002;
+      reticle3D.visible = false;
+      scene.add(reticle3D);
+    }
+
+    /* ======== SMOKE/STEAM — Shader-based column (Coffee Smoke style) ======== */
+    var smokeMesh = null;
+    var smokeUniforms = null;
+
+    function createSmokeSystem() {
+      var smokeGroup = new THREE.Group();
+      smokeGroup.name = 'smoke';
+
+      /* Load the real smoke texture */
+      var smokeTex = new THREE.TextureLoader().load('/ar/smoke.png');
+      smokeTex.wrapS = THREE.RepeatWrapping;
+      smokeTex.wrapT = THREE.RepeatWrapping;
+
+      /* Cylinder geometry — tall thin column rising from the food */
+      var geo = new THREE.CylinderGeometry(0.06, 0.03, 0.30, 16, 20, true);
+
+      /* Vertex shader: distort the cylinder with Perlin-like waves */
+      var vertexShader = [
+        'uniform float uTime;',
+        'varying vec2 vUv;',
+        'varying float vHeight;',
+        '',
+        '/* Simple 2D noise */  ',
+        'vec2 rotate2D(vec2 v, float a) {',
+        '  float s = sin(a); float c = cos(a);',
+        '  return mat2(c, -s, s, c) * v;',
+        '}',
+        '',
+        'void main() {',
+        '  vUv = uv;',
+        '  vHeight = uv.y;',
+        '',
+        '  vec3 pos = position;',
+        '',
+        '  /* Expand radius as smoke rises */',
+        '  float expand = 1.0 + vHeight * 1.8;',
+        '  pos.x *= expand;',
+        '  pos.z *= expand;',
+        '',
+        '  /* Wavy twist that increases with height */',
+        '  float twist = sin(vHeight * 6.0 + uTime * 1.5) * 0.015 * vHeight;',
+        '  float twist2 = cos(vHeight * 4.0 + uTime * 1.2 + 2.0) * 0.012 * vHeight;',
+        '  pos.x += twist;',
+        '  pos.z += twist2;',
+        '',
+        '  /* Wind drift — gentle push to one side */',
+        '  pos.x += sin(uTime * 0.5 + vHeight * 3.0) * 0.008 * vHeight;',
+        '  pos.z += cos(uTime * 0.4 + vHeight * 2.5) * 0.005 * vHeight;',
+        '',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);',
+        '}'
+      ].join('\n');
+
+      /* Fragment shader: smoke texture with animated UVs + fade */
+      var fragmentShader = [
+        'uniform sampler2D uSmokeTex;',
+        'uniform float uTime;',
+        'uniform float uOpacity;',
+        'varying vec2 vUv;',
+        'varying float vHeight;',
+        '',
+        'void main() {',
+        '  /* Scroll UV upward over time — smoke rises */',
+        '  vec2 uv = vUv;',
+        '  uv.y -= uTime * 0.08;',
+        '',
+        '  /* Distort UVs for wavy smoke look */',
+        '  uv.x += sin(uv.y * 8.0 + uTime * 1.5) * 0.08;',
+        '  uv.x += sin(uv.y * 4.0 + uTime * 0.8) * 0.05;',
+        '',
+        '  vec4 smoke = texture2D(uSmokeTex, uv);',
+        '',
+        '  /* Fade: thick at bottom, invisible at top */',
+        '  float fadeBottom = smoothstep(0.0, 0.15, vHeight);',
+        '  float fadeTop = 1.0 - smoothstep(0.5, 1.0, vHeight);',
+        '  float fade = fadeBottom * fadeTop;',
+        '',
+        '  /* Edge fade — softer at cylinder edges */',
+        '  float edgeFade = smoothstep(0.0, 0.3, vUv.x) * smoothstep(1.0, 0.7, vUv.x);',
+        '',
+        '  float alpha = smoke.r * fade * edgeFade * uOpacity;',
+        '',
+        '  gl_FragColor = vec4(0.92, 0.92, 0.92, alpha);',
+        '}'
+      ].join('\n');
+
+      smokeUniforms = {
+        uTime: { value: 0 },
+        uSmokeTex: { value: smokeTex },
+        uOpacity: { value: 0.35 }
+      };
+
+      var mat = new THREE.ShaderMaterial({
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader,
+        uniforms: smokeUniforms,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+
+      smokeMesh = new THREE.Mesh(geo, mat);
+      smokeMesh.position.y = 0.18 + 0.15; /* base of cylinder above food */
+      smokeGroup.add(smokeMesh);
+
+      return smokeGroup;
+    }
+
+    function updateSmoke(elapsed) {
+      if (!smokeUniforms || !placed) return;
+      smokeUniforms.uTime.value = elapsed;
+    }
+
+    /* ======== ITEM CONFIG ======== */
+    /* model: 3D food GLB | plate: plate GLB | img: fallback image if no model */
+    var ITEM_CONFIG = {
+      biryani:          { model: '/ar/biryani-model.glb', plate: '/ar/plate.glb', plateScale: 2.0, foodScale: 2.0, foodY: 0 },
+      'butter-chicken': { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
+      tandoori:         { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
+      naan:             { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
+      paneer:           { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
+      haleem:           { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
+      dosa:             { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.2 },
+    };
+
+    /* ======== CREATE FOOD MODEL ======== */
+    function createFoodModel() {
+      foodGroup = new THREE.Group();
+      var config = ITEM_CONFIG[itemKey] || ITEM_CONFIG.biryani;
+
+      /* Contact shadow — soft circle under the plate */
+      var shadowCanvas = document.createElement('canvas');
+      shadowCanvas.width = 256; shadowCanvas.height = 256;
+      var sCtx = shadowCanvas.getContext('2d');
+      var gradient = sCtx.createRadialGradient(128, 128, 10, 128, 128, 128);
+      gradient.addColorStop(0, 'rgba(0,0,0,0.45)');
+      gradient.addColorStop(0.3, 'rgba(0,0,0,0.25)');
+      gradient.addColorStop(0.7, 'rgba(0,0,0,0.08)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      sCtx.fillStyle = gradient;
+      sCtx.fillRect(0, 0, 256, 256);
+      var shadowTex = new THREE.CanvasTexture(shadowCanvas);
+      var shadowMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.8, 0.8),
+        new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })
+      );
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = 0.001;
+      foodGroup.add(shadowMesh);
+
+      var gltfLoader = new THREE.GLTFLoader();
+      var loadedCount = 0;
+      var plateTop = 0.01;
+      var totalToLoad = config.model ? 2 : 1; /* plate + food model, or just plate */
+
+      function onAllLoaded() {
+        loadedCount++;
+        if (loadedCount < totalToLoad) return;
+        /* Position food model on top of plate */
+        var foodModel = foodGroup.getObjectByName('foodModel');
+        var plateModel = foodGroup.getObjectByName('plateModel');
+        if (foodModel && plateModel) {
+          var pBox = new THREE.Box3().setFromObject(plateModel);
+          plateTop = pBox.max.y;
+          var fBox = new THREE.Box3().setFromObject(foodModel);
+          foodModel.position.y += plateTop - fBox.min.y + (config.foodY || 0);
+        }
+      }
+
+      /* 1. Load plate GLB */
+      gltfLoader.load(config.plate, function(gltf) {
+        var plateModel = gltf.scene;
+
+        /* Auto-scale plate to ~25cm diameter */
+        var box = new THREE.Box3().setFromObject(plateModel);
+        var size = new THREE.Vector3();
+        box.getSize(size);
+        var maxDim = Math.max(size.x, size.z);
+        var targetSize = 0.25 * (config.plateScale || 1);
+        var sc = targetSize / maxDim;
+        plateModel.scale.set(sc, sc, sc);
+
+        /* Center the plate */
+        box.setFromObject(plateModel);
+        var center = new THREE.Vector3();
+        box.getCenter(center);
+        plateModel.position.x = -center.x;
+        plateModel.position.z = -center.z;
+        plateModel.position.y = -box.min.y;
+
+        plateModel.traverse(function(child) {
+          if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+        });
+        plateModel.name = 'plateModel';
+        foodGroup.add(plateModel);
+        onAllLoaded();
+      });
+
+      /* 2. Load food: 3D model if available, else fallback to image */
+      if (config.model) {
+        gltfLoader.load(config.model, function(gltf) {
+          var foodModel = gltf.scene;
+
+          /* Scale food model to fit on the plate (~20cm) */
+          var box = new THREE.Box3().setFromObject(foodModel);
+          var size = new THREE.Vector3();
+          box.getSize(size);
+          var maxDim = Math.max(size.x, size.z);
+          var targetSize = 0.20 * (config.foodScale || 1);
+          var sc = targetSize / maxDim;
+          foodModel.scale.set(sc, sc, sc);
+
+          /* Center it horizontally */
+          box.setFromObject(foodModel);
+          var center = new THREE.Vector3();
+          box.getCenter(center);
+          foodModel.position.x = -center.x;
+          foodModel.position.z = -center.z;
+          foodModel.position.y = -box.min.y;
+
+          foodModel.traverse(function(child) {
+            if (child.isMesh) {
+              child.castShadow = false;
+              child.receiveShadow = false;
+              if (child.material) {
+                child.material.side = THREE.FrontSide;
+                child.material.depthWrite = true;
+                child.material.needsUpdate = true;
+              }
+            }
+          });
+          foodModel.name = 'foodModel';
+          foodGroup.add(foodModel);
+          onAllLoaded();
+
+        }, function(xhr) {
+          /* Loading progress — update hint */
+          if (xhr.total > 0) {
+            var pct = Math.round(xhr.loaded / xhr.total * 100);
+            var hint = document.getElementById('hint');
+            if (hint && pct < 100) hint.textContent = 'Loading 3D model... ' + pct + '%';
+          }
+        }, function(err) {
+          console.error('Failed to load food model:', err);
+          totalToLoad = 1;
+          onAllLoaded();
+        });
+      } else if (config.img) {
+        /* Fallback: food image on top of plate */
+        var texLoader = new THREE.TextureLoader();
+        texLoader.load(config.img, function(texture) {
+          texture.encoding = THREE.sRGBEncoding;
+          var aspect = texture.image.width / texture.image.height;
+          var foodW = 0.20, foodH = foodW / aspect;
+          var foodPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(foodW, foodH),
+            new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.05, side: THREE.DoubleSide })
+          );
+          foodPlane.position.y = 0.05 + foodH * 0.35;
+          foodPlane.rotation.x = -0.4;
+          foodPlane.name = 'foodModel';
+          foodGroup.add(foodPlane);
+          onAllLoaded();
+        });
+      }
+
+      foodGroup.add(createSmokeSystem());
+
+      foodGroup.visible = false;
+      scene.add(foodGroup);
+    }
+
+    /* ======== PLACE FOOD ======== */
+    function placeFood(x, y, z) {
+      foodGroup.position.set(x, y, z);
+      foodGroup.visible = true;
+      foodGroup.scale.set(0.01, 0.01, 0.01);
+      placed = true;
+      foodScale = 1;
+      scaleT = 0;
+
+      reticle3D.visible = false;
+      document.getElementById('hint').style.display = 'none';
+      document.getElementById('label').style.display = 'block';
+      document.getElementById('reset-btn').style.display = 'block';
+    }
+
+    var scaleT = 0;
+    function updateScaleIn() {
+      if (scaleT >= 1) return;
+      scaleT += 0.05;
+      if (scaleT > 1) scaleT = 1;
+      /* Elastic ease out */
+      var t = scaleT;
+      var s = 1 - Math.pow(1 - t, 3) * Math.cos(t * Math.PI * 1.2);
+      var fs = s * foodScale;
+      foodGroup.scale.set(fs, fs, fs);
+    }
+
+    /* ======== RESET ======== */
+    function resetPlacement() {
+      placed = false;
+      foodGroup.visible = false;
+      reticle3D.visible = true;
+      document.getElementById('label').style.display = 'none';
+      document.getElementById('hint').style.display = 'block';
+      document.getElementById('reset-btn').style.display = 'none';
+    }
+
+    /* ======== IDLE ANIMATION ======== */
+    function updateIdle(elapsed) {
+      if (!placed || !foodGroup.visible) return;
+      /* Very slow rotation of entire dish (plate + food + smoke together) */
+      foodGroup.rotation.y += 0.002;
+      updateSmoke(elapsed);
+    }
+
+    /* ======== UPDATE CAMERA FROM DEVICE ORIENTATION ======== */
+    function updateCameraOrientation() {
+      /* STOP tracking once food is placed — keeps it locked on the table */
+      if (placed || !orientationReady) return;
+
+      /* Smooth the sensor values */
+      smoothAlpha = lerpAngle(smoothAlpha, deviceAlpha, 0.1);
+      smoothBeta = lerp(smoothBeta, deviceBeta, 0.15);
+      smoothGamma = lerp(smoothGamma, deviceGamma, 0.15);
+
+      var gammaRad = THREE.MathUtils.degToRad(smoothGamma);
+      var tiltFactor = THREE.MathUtils.clamp((smoothBeta - 20) / 60, 0, 1);
+
+      camera.position.set(
+        Math.sin(gammaRad) * 0.15,
+        0.25 + tiltFactor * 0.25,
+        0.3 + (1 - tiltFactor) * 0.3
+      );
+
+      var lookY = -0.1 + tiltFactor * 0.1;
+      var lookZ = -0.3 + (1 - tiltFactor) * 0.3;
+      camera.lookAt(Math.sin(gammaRad) * -0.1, lookY, lookZ);
+    }
+
+    /* ======== UPDATE RETICLE POSITION (center of screen raycast) ======== */
+    function updateReticle() {
+      if (placed || !reticle3D) return;
+
+      /* Raycast from screen center to ground */
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      var hits = raycaster.intersectObject(groundPlane);
+
+      if (hits.length > 0) {
+        reticle3D.visible = true;
+        reticle3D.position.set(hits[0].point.x, 0.002, hits[0].point.z);
+
+        /* Pulse animation */
+        var t = clock.getElapsedTime();
+        var pulse = 1 + Math.sin(t * 3) * 0.08;
+        reticle3D.scale.set(pulse, 1, pulse);
+      } else {
+        reticle3D.visible = false;
+      }
+    }
+
+    /* ======== WEBXR PATH ======== */
+    function startWebXR() {
+      useWebXR = true;
+
+      return navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay', 'local'],
+        domOverlay: { root: document.getElementById('overlay') }
+      }).then(function(session) {
+
+        renderer.xr.enabled = true;
+        renderer.xr.setReferenceSpaceType('local');
+        renderer.xr.setSession(session);
+
+        return session.requestReferenceSpace('local').then(function(refSpace) {
+          xrRefSpace = refSpace;
+          return session.requestReferenceSpace('viewer');
+        }).then(function(viewerSpace) {
+          return session.requestHitTestSource({ space: viewerSpace });
+        }).then(function(src) {
+          xrHitTestSource = src;
+
+          session.addEventListener('select', function() {
+            if (reticle3D.visible && !placed) {
+              placeFood(reticle3D.position.x, reticle3D.position.y, reticle3D.position.z);
+            }
+          });
+
+          session.addEventListener('end', function() { useWebXR = false; });
+
+          renderer.setAnimationLoop(function(timestamp, frame) {
+            var elapsed = clock.getElapsedTime();
+
+            if (frame && xrHitTestSource && !placed) {
+              var results = frame.getHitTestResults(xrHitTestSource);
+              if (results.length > 0) {
+                var pose = results[0].getPose(xrRefSpace);
+                if (pose) {
+                  reticle3D.visible = true;
+                  var m = new THREE.Matrix4().fromArray(pose.transform.matrix);
+                  reticle3D.position.setFromMatrixPosition(m);
+
+                  var t = elapsed;
+                  var pulse = 1 + Math.sin(t * 3) * 0.08;
+                  reticle3D.scale.set(pulse, 1, pulse);
+                }
+              } else {
+                reticle3D.visible = false;
+              }
+            }
+
+            updateScaleIn();
+            updateIdle(elapsed);
+            renderer.render(scene, camera);
+          });
+
+          document.getElementById('overlay').style.display = 'block';
+          document.getElementById('hint').textContent = 'Move phone slowly — tap the ring to place dish';
+          document.getElementById('hint').style.display = 'block';
+        });
+      });
+    }
+
+    /* ======== FALLBACK PATH ======== */
+    function startFallback() {
+      useWebXR = false;
+      var video = document.getElementById('camera-feed');
+
+      return navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          /* Request autofocus + continuous focus */
+          focusMode: { ideal: 'continuous' },
+          focusDistance: { ideal: 0 }
+        }
+      }).then(function(stream) {
+        video.srcObject = stream;
+        video.style.display = 'block';
+        return video.play();
+      }).then(function() {
+
+        /* Try to enable continuous autofocus on the track */
+        var video = document.getElementById('camera-feed');
+        var track = video.srcObject.getVideoTracks()[0];
+        if (track && track.applyConstraints) {
+          track.applyConstraints({
+            advanced: [{ focusMode: 'continuous' }]
+          }).catch(function() {});
+        }
+
+        /* Camera starts looking at table angle */
+        camera.position.set(0, 0.4, 0.5);
+        camera.lookAt(0, 0, 0);
+
+        /* Request device orientation */
+        return requestOrientation();
+      }).then(function(granted) {
+        if (granted) setupOrientation();
+
+        /* Touch handlers */
+        var canvas = renderer.domElement;
+        var touches = {};
+
+        canvas.addEventListener('pointerdown', function(e) {
+          touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+
+          var touchIds = Object.keys(touches);
+          if (touchIds.length === 1 && !placed) {
+            /* Single tap — place at reticle position */
+            if (reticle3D.visible) {
+              placeFood(reticle3D.position.x, 0, reticle3D.position.z);
+            }
+          }
+        });
+
+        canvas.addEventListener('pointermove', function(e) {
+          if (!touches[e.pointerId]) return;
+          touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+
+          var touchIds = Object.keys(touches);
+          /* Pinch to resize */
+          if (touchIds.length === 2 && placed) {
+            var t0 = touches[touchIds[0]];
+            var t1 = touches[touchIds[1]];
+            var dist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
+
+            if (lastPinchDist > 0) {
+              var delta = dist / lastPinchDist;
+              foodScale = THREE.MathUtils.clamp(foodScale * delta, 0.3, 3.0);
+              foodGroup.scale.set(foodScale, foodScale, foodScale);
+            }
+            lastPinchDist = dist;
+          }
+
+          /* Single finger drag to reposition when placed */
+          if (touchIds.length === 1 && placed) {
+            touchPt.x = (e.clientX / window.innerWidth) * 2 - 1;
+            touchPt.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(touchPt, camera);
+            var hits = raycaster.intersectObject(groundPlane);
+            if (hits.length > 0) {
+              foodGroup.position.x = hits[0].point.x;
+              foodGroup.position.z = hits[0].point.z;
+            }
+          }
+        });
+
+        canvas.addEventListener('pointerup', function(e) {
+          delete touches[e.pointerId];
+          if (Object.keys(touches).length < 2) lastPinchDist = 0;
+        });
+
+        canvas.addEventListener('pointercancel', function(e) {
+          delete touches[e.pointerId];
+          if (Object.keys(touches).length < 2) lastPinchDist = 0;
+        });
+
+        /* Render loop */
+        function animate() {
+          requestAnimationFrame(animate);
+          var elapsed = clock.getElapsedTime();
+
+          updateCameraOrientation();
+          updateReticle();
+          updateScaleIn();
+          updateIdle(elapsed);
+
+          renderer.render(scene, camera);
+        }
+        animate();
+
+        document.getElementById('overlay').style.display = 'block';
+        document.getElementById('hint').textContent = 'Point at the table — tap the ring to place dish';
+        document.getElementById('hint').style.display = 'block';
+
+      }).catch(function(err) {
+        console.error('Camera error:', err);
+        document.getElementById('error').style.display = 'flex';
+      });
+    }
+
+    /* ======== START ======== */
+    function startExperience() {
+      document.getElementById('splash').style.display = 'none';
+
+      try {
+        createScene();
+      } catch (e) {
+        console.error('Scene creation failed:', e);
+        alert('Error creating 3D scene: ' + e.message);
+        return;
+      }
+
+      checkWebXR().then(function(supported) {
+        if (supported) {
+          return startWebXR().catch(function(e) {
+            console.warn('WebXR failed:', e);
+            return startFallback();
+          });
+        }
+        return startFallback();
+      }).catch(function(e) {
+        console.error('AR start failed:', e);
+        return startFallback();
+      });
+    }
+
+    checkWebXR().then(function(ok) {
+      document.getElementById('ar-mode-info').textContent = ok
+        ? 'Real surface detection available'
+        : 'Camera AR mode';
+    });
+
+    /* Register Service Worker — caches GLB models so they load instantly on revisit */
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/ar/sw.js').then(function(reg) {
+        console.log('SW registered, models will be cached');
+      }).catch(function(err) {
+        console.warn('SW registration failed:', err);
+      });
+    }
+  </script>
+</body>
+</html>

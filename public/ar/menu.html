@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hyderabad Hosts - AR Menu Cards</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f0f0; padding: 2rem; }
+
+    h1 { text-align: center; color: #ff6b35; font-size: 2rem; margin-bottom: 0.3rem; }
+    .subtitle { text-align: center; color: #666; margin-bottom: 0.5rem; }
+    .instructions {
+      text-align: center; color: #888; font-size: 0.85rem;
+      margin-bottom: 2rem; max-width: 500px; margin-left: auto; margin-right: auto;
+      line-height: 1.6;
+    }
+
+    .print-btn {
+      display: block; margin: 0 auto 2rem;
+      padding: 12px 36px; font-size: 1rem; font-weight: bold;
+      background: #ff6b35; color: #fff; border: none;
+      border-radius: 25px; cursor: pointer;
+      box-shadow: 0 4px 15px rgba(255,107,53,0.3);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.5rem; max-width: 900px; margin: 0 auto;
+    }
+
+    .card {
+      background: #fff; border-radius: 16px; padding: 1.5rem;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      border: 2px dashed #e0e0e0;
+      break-inside: avoid;
+    }
+    .card .color-dot {
+      width: 40px; height: 40px; border-radius: 8px;
+      margin: 0 auto 0.8rem; border: 2px solid rgba(0,0,0,0.1);
+    }
+    .card .dish-name { font-size: 1.2rem; font-weight: bold; color: #333; margin-bottom: 0.2rem; }
+    .card .dish-price { font-size: 1.1rem; color: #2ecc71; font-weight: bold; margin-bottom: 1rem; }
+    .card .qr-img { width: 180px; height: 180px; display: block; margin: 0 auto; }
+    .card .scan-text { font-size: 0.8rem; color: #999; margin-top: 0.6rem; }
+    .card .url-text { font-size: 0.65rem; color: #ccc; word-break: break-all; margin-top: 0.3rem; }
+
+    @media print {
+      body { background: #fff; padding: 1rem; }
+      .print-btn, .instructions, h1, .subtitle { display: none; }
+      .grid { gap: 1rem; }
+      .card { box-shadow: none; border: 1px dashed #ccc; padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Hyderabad Hosts</h1>
+  <p class="subtitle">AR Menu — QR Code Cards</p>
+  <p class="instructions">
+    Print this page and cut out each card. Place them on the menu next to each dish.<br>
+    Customers scan the QR code with their phone camera to see the dish in 3D AR!
+  </p>
+  <button class="print-btn" onclick="window.print()">Print QR Cards</button>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    var BASE = 'https://d-model-page.web.app';
+
+    var ITEMS = [
+      { key: 'biryani',         name: 'Hyderabadi Biryani', price: '\u20B9250', color: '#ff6b35' },
+      { key: 'butter-chicken',  name: 'Butter Chicken',     price: '\u20B9300', color: '#c0392b' },
+      { key: 'tandoori',        name: 'Tandoori Chicken',   price: '\u20B9350', color: '#d35400' },
+      { key: 'naan',            name: 'Butter Naan',        price: '\u20B960',  color: '#e8c44a' },
+      { key: 'paneer',          name: 'Paneer Tikka',       price: '\u20B9220', color: '#f39c12' },
+      { key: 'haleem',          name: 'Haleem',             price: '\u20B9180', color: '#8B5E3C' },
+      { key: 'dosa',            name: 'Masala Dosa',        price: '\u20B9120', color: '#C8A951' }
+    ];
+
+    var grid = document.getElementById('grid');
+
+    ITEMS.forEach(function(item) {
+      var url = BASE + '/?item=' + item.key;
+      var qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
+
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="color-dot" style="background:' + item.color + '"></div>' +
+        '<div class="dish-name">' + item.name + '</div>' +
+        '<div class="dish-price">' + item.price + '</div>' +
+        '<img class="qr-img" src="' + qrSrc + '" alt="QR code for ' + item.name + '" />' +
+        '<div class="scan-text">Scan to view in AR</div>' +
+        '<div class="url-text">' + url + '</div>';
+
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>

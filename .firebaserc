@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "d-model-page"
+  },
+  "targets": {
+    "d-model-page": {
+      "hosting": {
+        "d-model-page": [
+          "d-model-page"
+        ]
+      }
+    }
+  }
+}
