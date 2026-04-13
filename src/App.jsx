@@ -315,7 +315,7 @@ function Specialties() {
                   </div>
                   <p className="text-white/70 text-sm italic line-clamp-2 mb-3">{item.desc}</p>
                   <a href={`/ar/?item=${item.arItem}`} className="inline-flex items-center gap-2 text-primary-fixed hover:underline font-bold text-sm font-label">
-                    <Icon name="view_in_ar" className="text-sm" /> View in AR
+                    <Icon name="view_in_ar" className="text-sm" /> View in 3D
                   </a>
                 </div>
               </div>

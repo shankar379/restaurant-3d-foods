@@ -86,7 +86,7 @@
       See this dish in 3D — right on your table!<br>
       Point camera at the table and tap to place.
     </div>
-    <button id="start-btn" onclick="startExperience()">View in AR</button>
+    <button id="start-btn" onclick="startExperience()">View in 3D</button>
     <div class="ar-badge" id="ar-mode-info"></div>
   </div>
 
@@ -293,7 +293,7 @@
       smokeTex.wrapT = THREE.RepeatWrapping;
 
       /* Cylinder geometry — tall thin column rising from the food */
-      var geo = new THREE.CylinderGeometry(0.06, 0.03, 0.30, 16, 20, true);
+      var geo = new THREE.CylinderGeometry(0.05, 0.035, 0.24, 16, 20, true);
 
       /* Vertex shader: distort the cylinder with Perlin-like waves */
       var vertexShader = [
@@ -381,7 +381,7 @@
       });
 
       smokeMesh = new THREE.Mesh(geo, mat);
-      smokeMesh.position.y = 0.18 + 0.15; /* base of cylinder above food */
+      smokeMesh.position.y = 0.15 + 0.12; /* base of cylinder above food */
       smokeGroup.add(smokeMesh);
 
       return smokeGroup;
@@ -395,7 +395,7 @@
     /* ======== ITEM CONFIG ======== */
     /* model: 3D food GLB | plate: plate GLB | img: fallback image if no model */
     var ITEM_CONFIG = {
-      biryani:          { model: '/ar/biryani-model.glb', plate: '/ar/plate.glb', plateScale: 2.0, foodScale: 2.0, foodY: 0 },
+      biryani:          { model: '/ar/biryani-model.glb?v=3', plate: '/ar/plate.glb?v=3', plateScale: 1.6, foodScale: 1.6, foodY: 0 },
       'butter-chicken': { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
       tandoori:         { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
       naan:             { plate: '/ar/plate.glb', img: '/ar/biryani.png', plateScale: 1.0 },
@@ -422,7 +422,7 @@
       sCtx.fillRect(0, 0, 256, 256);
       var shadowTex = new THREE.CanvasTexture(shadowCanvas);
       var shadowMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.8, 0.8),
+        new THREE.PlaneGeometry(0.65, 0.65),
         new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })
       );
       shadowMesh.rotation.x = -Math.PI / 2;
@@ -512,17 +512,32 @@
           });
           foodModel.name = 'foodModel';
           foodGroup.add(foodModel);
+
+          /* DEBUG: show model loaded info */
+          var hint = document.getElementById('hint');
+          if (hint) hint.textContent = 'Biryani model loaded! Tap to place.';
+          console.log('Food model loaded:', foodModel.children.length, 'children');
+
           onAllLoaded();
 
         }, function(xhr) {
           /* Loading progress — update hint */
+          var hint = document.getElementById('hint');
           if (xhr.total > 0) {
             var pct = Math.round(xhr.loaded / xhr.total * 100);
-            var hint = document.getElementById('hint');
-            if (hint && pct < 100) hint.textContent = 'Loading 3D model... ' + pct + '%';
+            if (hint) hint.textContent = 'Loading biryani... ' + pct + '%';
+          } else if (xhr.loaded) {
+            if (hint) hint.textContent = 'Loading biryani... ' + Math.round(xhr.loaded / 1024) + ' KB';
           }
         }, function(err) {
-          console.error('Failed to load food model:', err);
+          console.error('FOOD MODEL FAILED:', err);
+          /* Show error visually */
+          var hint = document.getElementById('hint');
+          if (hint) {
+            hint.textContent = 'Model load failed: ' + (err.message || err);
+            hint.style.background = 'rgba(200,0,0,0.8)';
+            hint.style.display = 'block';
+          }
           totalToLoad = 1;
           onAllLoaded();
         });
@@ -560,6 +575,14 @@
       foodScale = 1;
       scaleT = 0;
 
+      /* Save camera offset relative to food at placement time */
+      placedCamOffset = {
+        x: camera.position.x - x,
+        z: camera.position.z - z,
+        camX: camera.position.x,
+        camZ: camera.position.z
+      };
+
       reticle3D.visible = false;
       document.getElementById('hint').style.display = 'none';
       document.getElementById('label').style.display = 'block';
@@ -581,6 +604,7 @@
     /* ======== RESET ======== */
     function resetPlacement() {
       placed = false;
+      placedCamOffset = null;
       foodGroup.visible = false;
       reticle3D.visible = true;
       document.getElementById('label').style.display = 'none';
@@ -597,27 +621,44 @@
     }
 
     /* ======== UPDATE CAMERA FROM DEVICE ORIENTATION ======== */
+    /* Camera ALWAYS tracks phone orientation so 3D stays locked to ground */
+    var placedCamOffset = null; /* stores camera-to-food offset at placement time */
+
     function updateCameraOrientation() {
-      /* STOP tracking once food is placed — keeps it locked on the table */
-      if (placed || !orientationReady) return;
+      if (!orientationReady) return;
 
       /* Smooth the sensor values */
-      smoothAlpha = lerpAngle(smoothAlpha, deviceAlpha, 0.1);
+      smoothAlpha = lerpAngle(smoothAlpha, deviceAlpha, 0.12);
       smoothBeta = lerp(smoothBeta, deviceBeta, 0.15);
       smoothGamma = lerp(smoothGamma, deviceGamma, 0.15);
 
       var gammaRad = THREE.MathUtils.degToRad(smoothGamma);
       var tiltFactor = THREE.MathUtils.clamp((smoothBeta - 20) / 60, 0, 1);
 
-      camera.position.set(
-        Math.sin(gammaRad) * 0.15,
-        0.25 + tiltFactor * 0.25,
-        0.3 + (1 - tiltFactor) * 0.3
-      );
+      var camX = Math.sin(gammaRad) * 0.15;
+      var camY = 0.25 + tiltFactor * 0.25;
+      var camZ = 0.3 + (1 - tiltFactor) * 0.3;
 
       var lookY = -0.1 + tiltFactor * 0.1;
       var lookZ = -0.3 + (1 - tiltFactor) * 0.3;
-      camera.lookAt(Math.sin(gammaRad) * -0.1, lookY, lookZ);
+
+      if (placed && placedCamOffset) {
+        /* After placement: camera tracks phone but food stays at its world position */
+        camera.position.set(
+          foodGroup.position.x + placedCamOffset.x + (camX - placedCamOffset.camX),
+          camY,
+          foodGroup.position.z + placedCamOffset.z + (camZ - placedCamOffset.camZ)
+        );
+        camera.lookAt(
+          foodGroup.position.x,
+          foodGroup.position.y + lookY + 0.1,
+          foodGroup.position.z + lookZ + 0.3
+        );
+      } else {
+        /* Before placement: free camera movement */
+        camera.position.set(camX, camY, camZ);
+        camera.lookAt(Math.sin(gammaRad) * -0.1, lookY, lookZ);
+      }
     }
 
     /* ======== UPDATE RETICLE POSITION (center of screen raycast) ======== */
@@ -856,13 +897,17 @@
         : 'Camera AR mode';
     });
 
-    /* Register Service Worker — caches GLB models so they load instantly on revisit */
+    /* Unregister any old Service Workers — they cause stale cache issues */
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/ar/sw.js').then(function(reg) {
-        console.log('SW registered, models will be cached');
-      }).catch(function(err) {
-        console.warn('SW registration failed:', err);
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) { reg.unregister(); });
       });
+      /* Clear all caches */
+      if (window.caches) {
+        caches.keys().then(function(names) {
+          names.forEach(function(n) { caches.delete(n); });
+        });
+      }
     }
   </script>
 </body>
